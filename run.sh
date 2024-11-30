@@ -4,7 +4,10 @@ if [ "$(docker images -q pka2xml:1.0.0)" = "" ]; then
   docker build -t pka2xml:1.0.0 .
 fi
 
-# run the Docker container
-docker run -it pka2xml:1.0.0
+# create a shared directory if it doesn't exist
+mkdir -p shared
 
-docker build -t pka2xml:1.0.0 . && docker run -it pka2xml:1.0.0
+# expose the shared directory in the container under /workspace
+docker run \
+	-v $(pwd)/shared:/workspace/shared \
+	-it pka2xml:1.0.0
