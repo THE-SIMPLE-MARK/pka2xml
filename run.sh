@@ -7,7 +7,7 @@ fi
 # create a shared directory if it doesn't exist
 mkdir -p shared
 
-# expose the shared directory in the container under /workspace
 docker run \
 	-v $(pwd)/shared:/workspace/shared \
+	--rm \
 	-it pka2xml:1.0.0
