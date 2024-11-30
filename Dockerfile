@@ -1,4 +1,4 @@
-FROM ubuntu:20.04
+FROM --platform=linux/amd64 ubuntu:20.04
 
 RUN apt-get update
 RUN apt-get install build-essential zlib1g-dev libcrypto++-dev libre2-dev -y
