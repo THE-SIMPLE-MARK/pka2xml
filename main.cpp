@@ -22,7 +22,7 @@ void help()
 
 where options are:
   -d <in> <out>   decrypt pka/pkt to xml
-  -e <in> <out>   encrypt pka/pkt to xml
+  -e <in> <out>   encrypt xml to pka/pkt
 
   -f <in> <out>   allow packet tracer file to be read by any version
 
