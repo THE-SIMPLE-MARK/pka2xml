@@ -16,7 +16,7 @@ namespace pka2xml {
 
 /// \brief Uncompress buffer with zlib. Opposite of `compress`.
 ///
-/// First four bytes correspond to the uncompressd output size.
+/// First four bytes correspond to the uncompressed output size.
 inline std::string uncompress(const unsigned char *data, int nbytes) {
 	unsigned long len = (data[0] << 24)
 		| (data[1] << 16)
