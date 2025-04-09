@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <string>
 #include <vector>
+#include <iostream>
 
 namespace pka2xml {
 
@@ -339,6 +340,66 @@ inline std::string fix(std::string input) {
         return decrypt_old(input);
     }
     return input;
+}
+
+/**
+ * @brief Modifies the user profile name in the XML content
+ * 
+ * @param xml The XML content to modify
+ * @param new_name The new name to set
+ * @param verbose Whether to show debug logs
+ * @return std::string The modified XML content
+ */
+inline std::string modify_user_profile(const std::string& xml, const std::string& new_name, bool verbose = false) {
+    if (xml.empty()) {
+        return "";
+    }
+
+    if (verbose) {
+        std::cout << "Starting modify_user_profile with XML size: " << xml.size() << std::endl;
+        std::cout << "Searching for USER_PROFILE section..." << std::endl;
+    }
+
+    // Find the USER_PROFILE section
+    size_t profile_start = xml.find("<USER_PROFILE>");
+    size_t profile_end = xml.find("</USER_PROFILE>", profile_start);
+    
+    if (profile_start == std::string::npos || profile_end == std::string::npos) {
+        if (verbose) std::cerr << "Error: Could not find USER_PROFILE section" << std::endl;
+        return "";
+    }
+    
+    if (verbose) {
+        std::cout << "Found USER_PROFILE section at positions " << profile_start << " to " << profile_end << std::endl;
+    }
+
+    // Find the NAME tag within USER_PROFILE
+    size_t name_start = xml.find("<NAME>", profile_start);
+    size_t name_end = xml.find("</NAME>", name_start);
+    
+    if (name_start == std::string::npos || name_end == std::string::npos || name_start > profile_end) {
+        if (verbose) std::cerr << "Error: Could not find NAME tag within USER_PROFILE" << std::endl;
+        return "";
+    }
+    
+    if (verbose) {
+        std::cout << "Found NAME tag within USER_PROFILE at positions " << name_start << " and " << name_end << std::endl;
+        std::cout << "Context around NAME tag in USER_PROFILE:" << std::endl;
+        std::cout << xml.substr(name_start - 50, 100) << std::endl;
+        std::cout << "Will replace with: <NAME>" << new_name << "</NAME>" << std::endl;
+    }
+
+    // Create the modified XML
+    std::string result = xml;
+    result.replace(name_start, name_end - name_start + 7, "<NAME>" + new_name + "</NAME>");
+    
+    if (verbose) {
+        std::cout << "Replacement completed, verifying result..." << std::endl;
+        std::cout << "Context after replacement:" << std::endl;
+        std::cout << result.substr(name_start - 50, 100) << std::endl;
+    }
+
+    return result;
 }
 
 } // namespace pka2xml

@@ -12,15 +12,15 @@ dynamic-install: pka2xml-dynamic install
 
 .PHONY: pka2xml-static
 pka2xml-static: main.cpp
-	g++ -o pka2xml main.cpp -I/usr/local/include /usr/lib/libz.a /usr/local/lib/libre2.a /usr/local/lib/libcryptopp.a -lpthread -static -static-libstdc++
+	g++ -std=c++17 -o pka2xml main.cpp -I/usr/local/include /usr/lib/libz.a /usr/local/lib/libre2.a /usr/local/lib/libcryptopp.a -lpthread -static -static-libstdc++
 
 .PHONY: pka2xml-static-docker
 pka2xml-static-docker: main.cpp
-	g++ -o pka2xml main.cpp -I/usr/include /usr/lib/x86_64-linux-gnu/libz.a /usr/lib/x86_64-linux-gnu/libre2.a /usr/lib/x86_64-linux-gnu/libcryptopp.a -lpthread -static -static-libstdc++
+	g++ -std=c++17 -o pka2xml main.cpp -I/usr/include /usr/lib/x86_64-linux-gnu/libz.a /usr/lib/x86_64-linux-gnu/libre2.a /usr/lib/x86_64-linux-gnu/libcryptopp.a -lpthread -static -static-libstdc++
 
 .PHONY: pka2xml-dynamic
 pka2xml-dynamic: main.cpp
-	g++ -o pka2xml main.cpp -I/usr/local/include -L/usr/local/lib -lcryptopp -lz -lre2
+	g++ -std=c++17 -o pka2xml main.cpp -I/usr/local/include -L/usr/local/lib -lcryptopp -lz -lre2
 
 install:
 	cp pka2xml /usr/local/bin
