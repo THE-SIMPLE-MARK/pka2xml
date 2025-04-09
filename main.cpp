@@ -86,9 +86,9 @@ Examples:
   pka2xml -e foobar.xml foobar.pka
   pka2xml -nets $HOME/packettracer/nets
   pka2xml -logs $HOME/packettracer/pt_12.05.2020_21.07.17.338.log
-  pka2xml -r file.pka "New Name"  # Creates file_NewName.pka
-  pka2xml -rb "New Name" file1.pka file2.pka file3.pka  # Creates file1_NewName.pka, etc.
-  pka2xml -rbm file.pka "Name1" "Name2" "Name3"  # Creates file_Name1.pka, file_Name2.pka, etc.
+  pka2xml -r file.pka "New Name"
+  pka2xml -rb "New Name" file1.pka file2.pka file3.pka
+  pka2xml -rbm file.pka "Name1" "Name2" "Name3"
 )" << std::endl;
     std::exit(0);
 }
