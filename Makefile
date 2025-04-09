@@ -2,13 +2,13 @@
 all: static-install
 
 .PHONY: static-install
-static-install: pka2xml-static patch-static install
+static-install: pka2xml-static install
 
 .PHONY: static-install-docker
-static-install-docker: pka2xml-static-docker patch-static install
+static-install-docker: pka2xml-static-docker install
 
 .PHONY: dynamic-install
-dynamic-install: pka2xml-dynamic patch-dynamic install
+dynamic-install: pka2xml-dynamic install
 
 .PHONY: pka2xml-static
 pka2xml-static: main.cpp
@@ -22,17 +22,8 @@ pka2xml-static-docker: main.cpp
 pka2xml-dynamic: main.cpp
 	g++ -o pka2xml main.cpp -I/usr/local/include -L/usr/local/lib -lcryptopp -lz -lre2
 
-.PHONY: patch-static
-patch-static: patch.c
-	gcc -o patch patch.c -static -static-libgcc
-
-.PHONY: patch-dynamic
-patch-dynamic: patch.c
-	gcc -o patch patch.c
-
 install:
-	cp patch /usr/local/bin/PacketTracer
 	cp pka2xml /usr/local/bin
 
 clean:
-	rm patch pka2xml
+	rm pka2xml

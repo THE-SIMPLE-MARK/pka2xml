@@ -4,121 +4,140 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <memory>
 
 #include "include/pka2xml.hpp"
 
-bool opt_exists(char *begin[], char *end[], const std::string &option) {
-  return std::find(begin, end, option) != end;
+namespace {
+
+// Helper function to check if an option exists in argv
+bool option_exists(char* begin[], char* end[], const std::string& option) {
+    return std::find(begin, end, option) != end;
 }
 
-void die(const char *message) {
-  std::fprintf(stderr, "%s", message);
-  std::exit(1);
+// Helper function to get option value
+char* get_option_value(char* begin[], char* end[], const std::string& option) {
+    auto it = std::find(begin, end, option);
+    if (it != end && ++it != end) {
+        return *it;
+    }
+    return nullptr;
 }
 
-void help()
-{
-  std::printf(R"(usage: pka2xml [ options ]
+// Error handling function
+void die(const std::string& message) {
+    std::cerr << "Error: " << message << std::endl;
+    std::exit(1);
+}
 
-where options are:
-  -d <in> <out>   decrypt pka/pkt to xml
-  -e <in> <out>   encrypt xml to pka/pkt
+// RAII wrapper for file operations
+class FileHandler {
+public:
+    FileHandler(const std::string& filename, std::ios_base::openmode mode)
+        : stream(filename, mode) {
+        if (!stream.is_open()) {
+            throw std::runtime_error("Failed to open file: " + filename);
+        }
+    }
 
-  -f <in> <out>   allow packet tracer file to be read by any version
+    ~FileHandler() {
+        if (stream.is_open()) {
+            stream.close();
+        }
+    }
 
-  -nets <in>      decrypt packet tracer "nets" file
-  -logs <in>      decrypt packet tracer log file
+    std::fstream& get() { return stream; }
 
-  --forge <out>   forge authentication file to bypass login
+private:
+    std::fstream stream;
+};
 
+// Process input file and return its contents
+std::string read_file_contents(const std::string& filename) {
+    FileHandler file(filename, std::ios::in | std::ios::binary);
+    return std::string(std::istreambuf_iterator<char>(file.get()),
+                      std::istreambuf_iterator<char>());
+}
 
-examples:
+// Write contents to output file
+void write_file_contents(const std::string& filename, const std::string& contents) {
+    FileHandler file(filename, std::ios::out | std::ios::binary);
+    file.get() << contents;
+}
+
+void print_help() {
+    std::cout << R"(Usage: pka2xml [options]
+
+Options:
+  -d <in> <out>   Decrypt pka/pkt to xml
+  -e <in> <out>   Encrypt xml to pka/pkt
+  -f <in> <out>   Allow packet tracer file to be read by any version
+  -nets <in>      Decrypt packet tracer "nets" file
+  -logs <in>      Decrypt packet tracer log file
+  --forge <out>   Forge authentication file to bypass login
+
+Examples:
   pka2xml -d foobar.pka foobar.xml
   pka2xml -e foobar.xml foobar.pka
   pka2xml -nets $HOME/packettracer/nets
   pka2xml -logs $HOME/packettracer/pt_12.05.2020_21.07.17.338.log
-)");
-  std::exit(1);
+)" << std::endl;
+    std::exit(0);
 }
 
-int main(int argc, char *argv[]) {
-  if (argc == 1) {
-    help();
-  }
+} // namespace
+
+int main(int argc, char* argv[]) {
+    if (argc == 1) {
+        print_help();
+    }
 
 #ifdef HAS_UI
-  if (argc > 1 && std::string(argv[1]) == "gui") {
-    QApplication app(argc, argv);
-    Gui gui{};
-    gui.show();
-    return app.exec();
-  }
+    if (argc > 1 && std::string(argv[1]) == "gui") {
+        QApplication app(argc, argv);
+        Gui gui{};
+        gui.show();
+        return app.exec();
+    }
 #endif
 
-  // TODO graceful error checking
-  try {
-    if (argc > 3 && opt_exists(argv, argv + argc, "-d")) {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      f_in.close();
-      std::ofstream f_out{argv[3]};
-      if (!f_out.is_open()) {
-        die("error opening output file");
-      }
-      f_out << pka2xml::decrypt_pka(input);
-      f_out.close();
-    } else if (argc > 3 && opt_exists(argv, argv + argc, "-e")) {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      f_in.close();
-      std::ofstream f_out{argv[3]};
-      if (!f_out.is_open()) {
-        die("error opening output file");
-      }
-      f_out << pka2xml::encrypt_pka(input);
-      f_out.close();
-    } else if (argc > 2 && opt_exists(argv, argv + argc, "-logs")) {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string line;
-      while (std::getline(f_in, line)) {
-        std::cout << pka2xml::decrypt_logs(line) << std::endl;
-      }
-      f_in.close();
-    } else if (argc > 2 && opt_exists(argv, argv + argc, "-nets")) {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      std::cout << pka2xml::decrypt_nets(input) << std::endl;
-      f_in.close();
-    } else if (argc > 2 && opt_exists(argv, argv + argc, "--forge")) {
-      std::ofstream f_out{argv[2]};
-      f_out << pka2xml::encrypt_nets("foobar~foobar~foobar~foobar~1700000000");
-      f_out.close();
-    } else if (argc > 3 && opt_exists(argv, argv + argc, "-f")) {
-      std::ifstream f_in{argv[2]};
-      if (!f_in.is_open()) {
-        die("error opening input file");
-      }
-      std::string input{std::istreambuf_iterator<char>(f_in), std::istreambuf_iterator<char>()};
-      f_in.close();
-      std::ofstream f_out{argv[3]};
-      f_out << pka2xml::fix(input);
-      f_out.close();
-    } else {
-      help();
+    try {
+        if (argc > 3 && option_exists(argv, argv + argc, "-d")) {
+            const std::string input = read_file_contents(argv[2]);
+            write_file_contents(argv[3], pka2xml::decrypt_pka(input));
+        }
+        else if (argc > 3 && option_exists(argv, argv + argc, "-e")) {
+            const std::string input = read_file_contents(argv[2]);
+            write_file_contents(argv[3], pka2xml::encrypt_pka(input));
+        }
+        else if (argc > 2 && option_exists(argv, argv + argc, "-logs")) {
+            FileHandler file(argv[2], std::ios::in);
+            std::string line;
+            while (std::getline(file.get(), line)) {
+                std::cout << pka2xml::decrypt_logs(line) << std::endl;
+            }
+        }
+        else if (argc > 2 && option_exists(argv, argv + argc, "-nets")) {
+            const std::string input = read_file_contents(argv[2]);
+            std::cout << pka2xml::decrypt_nets(input) << std::endl;
+        }
+        else if (argc > 2 && option_exists(argv, argv + argc, "--forge")) {
+            write_file_contents(argv[2], pka2xml::encrypt_nets("foobar~foobar~foobar~foobar~1700000000"));
+        }
+        else if (argc > 3 && option_exists(argv, argv + argc, "-f")) {
+            const std::string input = read_file_contents(argv[2]);
+            write_file_contents(argv[3], pka2xml::fix(input));
+        }
+        else {
+            print_help();
+        }
     }
-  } catch (int err) {
-    die("error during the processing of the files, make sure the input files are valid");
-  }
+    catch (const std::exception& e) {
+        die(e.what());
+    }
+    catch (...) {
+        die("Unknown error occurred during file processing");
+    }
+
+    return 0;
 }

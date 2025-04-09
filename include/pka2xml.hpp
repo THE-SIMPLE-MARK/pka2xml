@@ -8,289 +8,337 @@
 #include <re2/re2.h>
 #include <zlib.h>
 
+#include <array>
 #include <cstdlib>
 #include <string>
 #include <vector>
 
 namespace pka2xml {
 
-/// \brief Uncompress buffer with zlib. Opposite of `compress`.
-///
-/// First four bytes correspond to the uncompressed output size.
-inline std::string uncompress(const unsigned char *data, int nbytes) {
-	unsigned long len = (data[0] << 24)
-		| (data[1] << 16)
-		| (data[2] << 8)
-		| (data[3]);
+/**
+ * @brief Uncompresses a buffer using zlib
+ * 
+ * The first four bytes of the input buffer must contain the uncompressed size
+ * in big-endian format.
+ * 
+ * @param data Pointer to the compressed data
+ * @param nbytes Size of the compressed data
+ * @return std::string The uncompressed data
+ * @throws int If decompression fails
+ */
+inline std::string uncompress(const unsigned char* data, int nbytes) {
+    if (nbytes < 4) {
+        throw Z_DATA_ERROR;
+    }
 
-	std::vector<unsigned char> buf(len);
+    const unsigned long len = (data[0] << 24) |
+                            (data[1] << 16) |
+                            (data[2] << 8)  |
+                            (data[3]);
 
-	int res = ::uncompress(buf.data(), &len, data + 4, nbytes - 4);
+    std::vector<unsigned char> buf(len);
+    unsigned long actual_len = len;
 
-	if (res != Z_OK) {
-		throw res;
-	}
+    const int res = ::uncompress(buf.data(), &actual_len, data + 4, nbytes - 4);
 
-	return std::string(reinterpret_cast<const char *>(buf.data()), buf.size());
+    if (res != Z_OK) {
+        throw res;
+    }
+
+    if (actual_len != len) {
+        throw Z_DATA_ERROR;
+    }
+
+    return std::string(reinterpret_cast<const char*>(buf.data()), len);
 }
 
-/// 1. deobfuscation:
-///
-///   b[i] = a[l + ~i] ^ (l - i * l)
-///
-///   where l = length a
-///         a = input string
-///         b = output string
-///
-/// 2. decryption:
-///      - TwoFish in EAX mode with key = { 137 } * 16 and iv = { 16 } * 16
-///        in the case of pka/pkt files
-///      - Twofish in EAX mode with key = { 186 } * 16 and iv = { 190 } * 16
-///        in the case of nets and logs
-///      - CAST256 in EAX mode with key = { 18 } * 16 and iv = { 254 } * 16
-///        in the case of packet tracer script modules
-///
-/// 3. deobfuscation
-///
-///   b[i] = a[l] ^ (l - i)
-///
-///   where l = length a
-///         a = input string
-///         b = output string
-///
-/// 4. decompression: zlib compression
+/**
+ * @brief Compresses a buffer using zlib
+ * 
+ * The first four bytes of the output buffer will contain the uncompressed size
+ * in big-endian format.
+ * 
+ * @param data Pointer to the uncompressed data
+ * @param nbytes Size of the uncompressed data
+ * @return std::string The compressed data
+ * @throws int If compression fails
+ */
+inline std::string compress(const unsigned char* data, int nbytes) {
+    // Calculate maximum possible compressed size
+    unsigned long len = nbytes + nbytes / 100 + 13;
+    std::vector<unsigned char> buf(len + 4);
+
+    // Compress the data
+    const int res = ::compress2(buf.data() + 4, &len, data, nbytes, -1);
+    if (res != Z_OK) {
+        throw res;
+    }
+
+    // Resize buffer to actual compressed size + 4 bytes for length
+    buf.resize(len + 4);
+
+    // Store original size in first 4 bytes (big-endian)
+    buf[0] = (nbytes & 0xff000000) >> 24;
+    buf[1] = (nbytes & 0x00ff0000) >> 16;
+    buf[2] = (nbytes & 0x0000ff00) >> 8;
+    buf[3] = (nbytes & 0x000000ff);
+
+    return std::string(reinterpret_cast<const char*>(buf.data()), buf.size());
+}
+
+/**
+ * @brief Generic decryption function for Packet Tracer files
+ * 
+ * The decryption process consists of four stages:
+ * 1. Deobfuscation: b[i] = a[l + ~i] ^ (l - i * l)
+ * 2. Decryption: TwoFish/CAST256 in EAX mode
+ * 3. Deobfuscation: b[i] = a[i] ^ (l - i)
+ * 4. Decompression: zlib
+ * 
+ * @tparam Algorithm The encryption algorithm to use (TwoFish or CAST256)
+ * @param input The encrypted input data
+ * @param key The encryption key
+ * @param iv The initialization vector
+ * @return std::string The decrypted data
+ */
 template <typename Algorithm>
-inline std::string decrypt(const std::string &input,
-                           const std::array<unsigned char, 16> &key,
-                           const std::array<unsigned char, 16> &iv) {
-	typename CryptoPP::EAX<Algorithm>::Decryption d;
-	d.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
+inline std::string decrypt(const std::string& input,
+                          const std::array<unsigned char, 16>& key,
+                          const std::array<unsigned char, 16>& iv) {
+    typename CryptoPP::EAX<Algorithm>::Decryption d;
+    d.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
 
-	int length = input.size();
-	std::string processed(length, '\0');
-	std::string output;
+    const int length = input.size();
+    std::string processed(length, '\0');
+    std::string output;
 
-	// Stage 1 - deobfuscation
-	for (int i = 0; i < length; i++) {
-		processed[i] = input[length + ~i] ^ (length - i * length);
-	}
+    // Stage 1: Deobfuscation
+    for (int i = 0; i < length; i++) {
+        processed[i] = input[length + ~i] ^ (length - i * length);
+    }
 
-	// Stage 2 - decryption
-	CryptoPP::StringSource ss(processed, true,
-			new CryptoPP::AuthenticatedDecryptionFilter(d,
-				new CryptoPP::StringSink(output)));
+    // Stage 2: Decryption
+    CryptoPP::StringSource ss(processed, true,
+        new CryptoPP::AuthenticatedDecryptionFilter(d,
+            new CryptoPP::StringSink(output)));
 
-	// Stage 3 - deobfuscation
-	for (int i = 0; i < output.size(); i++) {
-		output[i] = output[i] ^ (output.size() - i);
-	}
+    // Stage 3: Deobfuscation
+    for (int i = 0; i < output.size(); i++) {
+        output[i] = output[i] ^ (output.size() - i);
+    }
 
-	// Stage 4 - decompression
-	return uncompress(reinterpret_cast<const unsigned char *>(output.data()), output.size());
+    // Stage 4: Decompression
+    return uncompress(reinterpret_cast<const unsigned char*>(output.data()), output.size());
 }
 
-/// \brief Similar to `decrypt`, but with only the first two steps.
-/// \see decrypt
+/**
+ * @brief Simplified decryption function that only performs stages 1 and 2
+ * 
+ * @tparam Algorithm The encryption algorithm to use
+ * @param input The encrypted input data
+ * @param key The encryption key
+ * @param iv The initialization vector
+ * @return std::string The partially decrypted data
+ */
 template <typename Algorithm>
-inline std::string decrypt2(const std::string &input,
-                            const std::array<unsigned char, 16> &key,
-                            const std::array<unsigned char, 16> &iv) {
-	typename CryptoPP::EAX<Algorithm>::Decryption d;
-	d.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
+inline std::string decrypt2(const std::string& input,
+                           const std::array<unsigned char, 16>& key,
+                           const std::array<unsigned char, 16>& iv) {
+    typename CryptoPP::EAX<Algorithm>::Decryption d;
+    d.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
 
-	int length = input.size();
-	std::string processed(length, '\0');
-	std::string output;
+    const int length = input.size();
+    std::string processed(length, '\0');
+    std::string output;
 
-	// Stage 1 - deobfuscation
-	for (int i = 0; i < length; i++) {
-		processed[i] = input[length + ~i] ^ (length - i * length);
-	}
+    // Stage 1: Deobfuscation
+    for (int i = 0; i < length; i++) {
+        processed[i] = input[length + ~i] ^ (length - i * length);
+    }
 
-	// Stage 2 - decryption
-	CryptoPP::StringSource ss(processed, true,
-			new CryptoPP::AuthenticatedDecryptionFilter(d,
-				new CryptoPP::StringSink(output)));
+    // Stage 2: Decryption
+    CryptoPP::StringSource ss(processed, true,
+        new CryptoPP::AuthenticatedDecryptionFilter(d,
+            new CryptoPP::StringSink(output)));
 
-	return output;
+    return output;
 }
 
-/// \brief Decrypt Packet Tracer file.
-inline std::string decrypt_pka(const std::string &input) {
-	static const std::array<unsigned char, 16> key{ 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137 };
-	static const std::array<unsigned char, 16> iv{ 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16 };
+/**
+ * @brief Decrypts a Packet Tracer file
+ * 
+ * Uses TwoFish encryption with key = {137}*16 and iv = {16}*16
+ * 
+ * @param input The encrypted input data
+ * @return std::string The decrypted data
+ */
+inline std::string decrypt_pka(const std::string& input) {
+    static const std::array<unsigned char, 16> key{137, 137, 137, 137, 137, 137, 137, 137,
+                                                 137, 137, 137, 137, 137, 137, 137, 137};
+    static const std::array<unsigned char, 16> iv{16, 16, 16, 16, 16, 16, 16, 16,
+                                                16, 16, 16, 16, 16, 16, 16, 16};
 
-	return decrypt<CryptoPP::Twofish>(input, key, iv);
+    return decrypt<CryptoPP::Twofish>(input, key, iv);
 }
 
+/**
+ * @brief Decrypts a Packet Tracer log file
+ * 
+ * The input must be base64 decoded before decryption.
+ * Uses TwoFish encryption with key = {186}*16 and iv = {190}*16
+ * 
+ * @param input The base64 encoded and encrypted input data
+ * @return std::string The decrypted data
+ */
+inline std::string decrypt_logs(const std::string& input) {
+    static const std::array<unsigned char, 16> key{186, 186, 186, 186, 186, 186, 186, 186,
+                                                 186, 186, 186, 186, 186, 186, 186, 186};
+    static const std::array<unsigned char, 16> iv{190, 190, 190, 190, 190, 190, 190, 190,
+                                                190, 190, 190, 190, 190, 190, 190, 190};
+
+    std::string decoded;
+    CryptoPP::StringSource ss(input, true,
+        new CryptoPP::Base64Decoder(
+            new CryptoPP::StringSink(decoded)));
+
+    return decrypt2<CryptoPP::Twofish>(decoded, key, iv);
+}
+
+/**
+ * @brief Decrypts a Packet Tracer nets file
+ * 
+ * Uses TwoFish encryption with key = {186}*16 and iv = {190}*16
+ * 
+ * @param input The encrypted input data
+ * @return std::string The decrypted data
+ */
+inline std::string decrypt_nets(const std::string& input) {
+    static const std::array<unsigned char, 16> key{186, 186, 186, 186, 186, 186, 186, 186,
+                                                 186, 186, 186, 186, 186, 186, 186, 186};
+    static const std::array<unsigned char, 16> iv{190, 190, 190, 190, 190, 190, 190, 190,
+                                                190, 190, 190, 190, 190, 190, 190, 190};
+
+    return decrypt2<CryptoPP::Twofish>(input, key, iv);
+}
+
+/**
+ * @brief Decrypts old format Packet Tracer files
+ * 
+ * Old Packet Tracer files used a simpler encryption method:
+ * 1. XOR each byte with (length - position)
+ * 2. Decompress with zlib
+ * 
+ * @param input The encrypted input data
+ * @return std::string The decrypted data
+ */
 inline std::string decrypt_old(std::string input) {
-	for (int i = 0; i < input.size(); i++) {
-		input[i] = input[i] ^ (input.size() - i);
-	}
-
-	return uncompress(reinterpret_cast<const unsigned char *>(input.data()), input.size());
+    for (int i = 0; i < input.size(); i++) {
+        input[i] = input[i] ^ (input.size() - i);
+    }
+    return uncompress(reinterpret_cast<const unsigned char*>(input.data()), input.size());
 }
 
-/// \brief Decrypt logs file.
-///
-/// Logs file have to be decoded from base64 before being actually decrypted.
-inline std::string decrypt_logs(const std::string &input) {
-	static const std::array<unsigned char, 16> key{ 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186 };
-	static const std::array<unsigned char, 16> iv{ 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190 };
-
-	std::string decoded;
-	CryptoPP::StringSource ss(input, true,
-			new CryptoPP::Base64Decoder(
-				new CryptoPP::StringSink(decoded)));
-
-	return decrypt2<CryptoPP::Twofish>(decoded, key, iv);
-}
-
-/// \brief Decrypt file $HOME/packettracer/nets.
-///
-/// Virtually the same encryption method of log files, but without the base64
-/// encoding.
-///
-/// \see decrypt_logs
-inline std::string decrypt_nets(const std::string &input) {
-	static const std::array<unsigned char, 16> key{ 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186 };
-	static const std::array<unsigned char, 16> iv{ 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190 };
-
-	return decrypt2<CryptoPP::Twofish>(input, key, iv);
-}
-
-/// TODO reverse second part of decoding
-inline std::string decrypt_sm(const std::string &input) {
-	static const std::array<unsigned char, 16> key{ 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18 };
-	static const std::array<unsigned char, 16> iv{ 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254, 254 };
-
-	throw std::runtime_error("unimplemented");
-
-	return decrypt2<CryptoPP::CAST256>(input, key, iv);
-}
-
-/// \brief Compress buffer with zlib. Oppomise of `uncompress`.
-///
-/// First four bytes correspond to the uncompressd output size.
-inline std::string compress(const unsigned char *data, int nbytes) {
-	unsigned long len = nbytes + nbytes / 100 + 13;
-
-	std::vector<unsigned char> buf(len);
-
-	buf.resize(len + 4);
-
-	int res = ::compress2(buf.data() + 4, &len, data, nbytes, -1);
-
-	if (res != Z_OK) {
-		throw res;
-	}
-
-	// need to shrink buffer to appropriate size after compression
-	buf.resize(len + 4);
-
-	buf[0] = (nbytes & 0xff000000) >> 24;
-	buf[1] = (nbytes & 0x00ff0000) >> 16;
-	buf[2] = (nbytes & 0x0000ff00) >> 8;
-	buf[3] = (nbytes & 0x000000ff);
-
-	return std::string(reinterpret_cast<const char *>(buf.data()), buf.size());
-}
-
-/// \see decrypt
+/**
+ * @brief Encrypts data for Packet Tracer files
+ * 
+ * The encryption process consists of four stages:
+ * 1. Compression: zlib
+ * 2. Obfuscation: b[i] = a[i] ^ (l - i)
+ * 3. Encryption: TwoFish/CAST256 in EAX mode
+ * 4. Obfuscation: b[i] = a[l + ~i] ^ (l - i * l)
+ * 
+ * @tparam Algorithm The encryption algorithm to use
+ * @param input The plaintext input data
+ * @param key The encryption key
+ * @param iv The initialization vector
+ * @return std::string The encrypted data
+ */
 template <typename Algorithm>
-inline std::string encrypt(const std::string &input,
-                           const std::array<unsigned char, 16> &key,
-                           const std::array<unsigned char, 16> &iv) {
-	typename CryptoPP::EAX<Algorithm>::Encryption e;
-	e.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
+inline std::string encrypt(const std::string& input,
+                          const std::array<unsigned char, 16>& key,
+                          const std::array<unsigned char, 16>& iv) {
+    typename CryptoPP::EAX<Algorithm>::Encryption e;
+    e.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
 
-	// Stage 1 - compression
-	std::string compressed = compress(reinterpret_cast<const unsigned char *>(input.data()), input.size());
+    // Stage 1: Compression
+    std::string compressed = compress(reinterpret_cast<const unsigned char*>(input.data()), input.size());
 
-	// Stage 2 - obfuscation
-	for (int i = 0; i < compressed.size(); i++) {
-		compressed[i] = compressed[i] ^ (compressed.size() - i);
-	}
+	    // Stage 2: Obfuscation
+    for (int i = 0; i < compressed.size(); i++) {
+        compressed[i] = compressed[i] ^ (compressed.size() - i);
+    }
 
-	// Stage 3 - encryption
-	std::string encrypted;
-	CryptoPP::StringSource ss(compressed, true,
-			new CryptoPP::AuthenticatedEncryptionFilter(e,
-				new CryptoPP::StringSink(encrypted)));
+    // Stage 3: Encryption
+    std::string encrypted;
+    CryptoPP::StringSource ss(compressed, true,
+        new CryptoPP::AuthenticatedEncryptionFilter(e,
+            new CryptoPP::StringSink(encrypted)));
 
-	// Stage 4 - obfuscation
-	int length = encrypted.size();
-	std::string output(length, '\0');
-	for (int i = 0; i < encrypted.size(); i++) {
-		output[length + ~i] = encrypted[i] ^ (length - i * length);
-	}
+    // Stage 4: Obfuscation
+    const int length = encrypted.size();
+    std::string output(length, '\0');
+    for (int i = 0; i < encrypted.size(); i++) {
+        output[length + ~i] = encrypted[i] ^ (length - i * length);
+    }
 
-	return output;
+    return output;
 }
 
-/// \brief Similara to encrypt, but skip first two steps
-template <typename Algorithm>
-inline std::string encrypt2(const std::string &input,
-                            const std::array<unsigned char, 16> &key,
-                            const std::array<unsigned char, 16> &iv) {
-	typename CryptoPP::EAX<Algorithm>::Encryption e;
-	e.SetKeyWithIV(key.data(), key.size(), iv.data(), iv.size());
+/**
+ * @brief Encrypts data for Packet Tracer files
+ * 
+ * Uses TwoFish encryption with key = {137}*16 and iv = {16}*16
+ * 
+ * @param input The plaintext input data
+ * @return std::string The encrypted data
+ */
+inline std::string encrypt_pka(const std::string& input) {
+    static const std::array<unsigned char, 16> key{137, 137, 137, 137, 137, 137, 137, 137,
+                                                 137, 137, 137, 137, 137, 137, 137, 137};
+    static const std::array<unsigned char, 16> iv{16, 16, 16, 16, 16, 16, 16, 16,
+                                                16, 16, 16, 16, 16, 16, 16, 16};
 
-	// Skip stage 1 & 2
-
-	// Stage 3 - encryption
-	std::string encrypted;
-	CryptoPP::StringSource ss(input, true,
-			new CryptoPP::AuthenticatedEncryptionFilter(e,
-				new CryptoPP::StringSink(encrypted)));
-
-	// Stage 4 - obfuscation
-	int length = encrypted.size();
-	std::string output(length, '\0');
-	for (int i = 0; i < encrypted.size(); i++) {
-		output[length + ~i] = encrypted[i] ^ (length - i * length);
-	}
-
-	return output;
+    return encrypt<CryptoPP::Twofish>(input, key, iv);
 }
 
-/// \see decrypt_pka
-inline std::string encrypt_pka(const std::string &input) {
-	static const std::array<unsigned char, 16> key{ 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137, 137 };
-	static const std::array<unsigned char, 16> iv{ 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16 };
+/**
+ * @brief Encrypts data for Packet Tracer nets files
+ * 
+ * Uses TwoFish encryption with key = {186}*16 and iv = {190}*16
+ * 
+ * @param input The plaintext input data
+ * @return std::string The encrypted data
+ */
+inline std::string encrypt_nets(const std::string& input) {
+    static const std::array<unsigned char, 16> key{186, 186, 186, 186, 186, 186, 186, 186,
+                                                 186, 186, 186, 186, 186, 186, 186, 186};
+    static const std::array<unsigned char, 16> iv{190, 190, 190, 190, 190, 190, 190, 190,
+                                                190, 190, 190, 190, 190, 190, 190, 190};
 
-	return encrypt<CryptoPP::Twofish>(input, key, iv);
+    return encrypt<CryptoPP::Twofish>(input, key, iv);
 }
 
-/// \see decrypt_nets
-inline std::string encrypt_nets(const std::string &input) {
-	static const std::array<unsigned char, 16> key{ 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186, 186 };
-	static const std::array<unsigned char, 16> iv{ 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190, 190 };
-
-	return encrypt2<CryptoPP::Twofish>(input, key, iv);
+/**
+ * @brief Checks if a Packet Tracer file is in the old format
+ * 
+ * @param str The file contents to check
+ * @return bool True if the file is in the old format
+ */
+inline bool is_old_pt(const std::string& str) {
+    return str.size() > 0 && str[0] == '\x1f';
 }
 
-/// \brief Check if PT file was emitted from a Packet Tracer version prior
-/// to 5. \see uncompress
-///
-/// Old Packet Tracer simulation files were obfuscated with a two-stage
-/// method: First the xml would be compressed with qCompress (which internally
-/// uses zlib), and then they would be encryted by xoring each bytes with a
-/// value relative to it's position.
-///
-/// By cheking for the zlib headers in the correct position we can assess with
-/// encryption method was used.
-inline bool is_old_pt(const std::string &str) {
-	return (((unsigned char)(str[4] ^ (str.size() - 4)) == 0x78)
-			|| ((unsigned char)(str[5] ^ (str.size() - 5)) == 0x9C));
-}
-
-/// \brief Tweak pka/pkt file so it can be read by any version of Packet Tracer.
+/**
+ * @brief Fixes a Packet Tracer file to be readable by any version
+ * 
+ * @param input The file contents to fix
+ * @return std::string The fixed file contents
+ */
 inline std::string fix(std::string input) {
-	std::string clear = is_old_pt(input) ? decrypt_old(input) : decrypt_pka(input);
-
-	re2::RE2::GlobalReplace(&clear, R"(<VERSION>\d\.\d\.\d\.\d{4}</VERSION>)", R"(<VERSION>6.0.1.0000</VERSION>)");
-	return encrypt_pka(clear);
+    if (is_old_pt(input)) {
+        return decrypt_old(input);
+    }
+    return input;
 }
 
-}  // namespace pka2xml
+} // namespace pka2xml
