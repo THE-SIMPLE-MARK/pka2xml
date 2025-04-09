@@ -77,6 +77,7 @@ Options:
   -logs <in>      Decrypt packet tracer log file
   -r <in> <name>  Modify user profile name in pka/pkt file (creates new file)
   -rb <name> <files...>  Batch modify user profile name in multiple pka/pkt files
+  -rbm <in> <names...>  Create multiple variations of a file with different names
   --forge <out>   Forge authentication file to bypass login
   -v              Verbose output
 
@@ -87,6 +88,7 @@ Examples:
   pka2xml -logs $HOME/packettracer/pt_12.05.2020_21.07.17.338.log
   pka2xml -r file.pka "New Name"  # Creates file_NewName.pka
   pka2xml -rb "New Name" file1.pka file2.pka file3.pka  # Creates file1_NewName.pka, etc.
+  pka2xml -rbm file.pka "Name1" "Name2" "Name3"  # Creates file_Name1.pka, file_Name2.pka, etc.
 )" << std::endl;
     std::exit(0);
 }
@@ -262,6 +264,76 @@ int main(int argc, char* argv[]) {
                 std::cout << " (" << fail_count << " failed)";
             }
             std::cout << std::endl;
+        }
+        else if (argc > 3 && option_exists(argv, argv + argc, "-rbm")) {
+            try {
+                // Get the input filename and extension
+                std::filesystem::path input_path(argv[2]);
+                if (!std::filesystem::exists(input_path)) {
+                    die("Input file does not exist: " + std::string(argv[2]));
+                }
+                
+                std::string stem = input_path.stem().string();
+                std::string extension = input_path.extension().string();
+                
+                if (verbose) std::cout << "Reading input file: " << argv[2] << std::endl;
+                const std::string input = read_file_contents(argv[2]);
+                if (verbose) std::cout << "Input file size: " << input.size() << " bytes" << std::endl;
+                
+                if (verbose) std::cout << "Decrypting file..." << std::endl;
+                std::string xml = pka2xml::decrypt_pka(input);
+                if (verbose) std::cout << "Decrypted XML size: " << xml.size() << " bytes" << std::endl;
+                
+                if (xml.empty()) {
+                    die("Failed to decrypt the input file");
+                }
+                
+                // Process each name argument
+                int success_count = 0;
+                int fail_count = 0;
+                
+                for (int i = 3; i < argc; i++) {
+                    try {
+                        std::string new_name = argv[i];
+                        std::string new_filename = stem + "_" + new_name + extension;
+                        
+                        if (verbose) std::cout << "\nProcessing name " << (i-2) << "/" << (argc-3) << ": " << new_name << std::endl;
+                        
+                        // Modify the user profile name
+                        std::string modified_xml = pka2xml::modify_user_profile(xml, new_name, verbose);
+                        
+                        if (modified_xml.empty()) {
+                            std::cerr << "Error: Failed to modify user profile name to: " << new_name << std::endl;
+                            fail_count++;
+                            continue;
+                        }
+                        
+                        // Write the modified file
+                        write_file_contents(new_filename, pka2xml::encrypt_pka(modified_xml));
+                        if (verbose) {
+                            std::cout << "Successfully created: " << new_filename << std::endl;
+                        } else {
+                            std::cout << "Created: " << new_filename << std::endl;
+                        }
+                        success_count++;
+                        
+                    } catch (const std::exception& e) {
+                        std::cerr << "Error processing name " << argv[i] << ": " << e.what() << std::endl;
+                        fail_count++;
+                    }
+                }
+                
+                // Print summary
+                std::cout << "\nCreated " << success_count << " files";
+                if (fail_count > 0) {
+                    std::cout << " (" << fail_count << " failed)";
+                }
+                std::cout << std::endl;
+                
+            } catch (const std::exception& e) {
+                if (verbose) std::cerr << "Detailed error: " << e.what() << std::endl;
+                die("Error processing file: " + std::string(e.what()));
+            }
         }
         else {
             print_help();
