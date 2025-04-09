@@ -124,7 +124,7 @@ inline std::string decrypt(const std::string& input,
             new CryptoPP::StringSink(output)));
 
     // Stage 3: Deobfuscation
-    for (int i = 0; i < output.size(); i++) {
+    for (size_t i = 0; i < output.size(); i++) {
         output[i] = output[i] ^ (output.size() - i);
     }
 
@@ -233,7 +233,7 @@ inline std::string decrypt_nets(const std::string& input) {
  * @return std::string The decrypted data
  */
 inline std::string decrypt_old(std::string input) {
-    for (int i = 0; i < input.size(); i++) {
+    for (size_t i = 0; i < input.size(); i++) {
         input[i] = input[i] ^ (input.size() - i);
     }
     return uncompress(reinterpret_cast<const unsigned char*>(input.data()), input.size());
@@ -264,9 +264,9 @@ inline std::string encrypt(const std::string& input,
     // Stage 1: Compression
     std::string compressed = compress(reinterpret_cast<const unsigned char*>(input.data()), input.size());
 
-	    // Stage 2: Obfuscation
-    for (int i = 0; i < compressed.size(); i++) {
-        compressed[i] = compressed[i] ^ (compressed.size() - i);
+    // Stage 2: Obfuscation
+    for (size_t i = 0; i < compressed.size(); i++) {
+        compressed[i] = static_cast<unsigned char>(compressed[i] ^ key[i % key.size()]);
     }
 
     // Stage 3: Encryption
@@ -278,8 +278,8 @@ inline std::string encrypt(const std::string& input,
     // Stage 4: Obfuscation
     const int length = encrypted.size();
     std::string output(length, '\0');
-    for (int i = 0; i < encrypted.size(); i++) {
-        output[length + ~i] = encrypted[i] ^ (length - i * length);
+    for (size_t i = 0; i < encrypted.size(); i++) {
+        output[length + ~i] = static_cast<unsigned char>(encrypted[i] ^ key[i % key.size()]);
     }
 
     return output;

@@ -1,29 +1,61 @@
-.PHONY: all
-all: static-install
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -O3
+LDFLAGS = -lz -lcryptopp -lre2
 
-.PHONY: static-install
-static-install: pka2xml-static install
+# Detect OS
+UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+ifeq ($(UNAME_S),Darwin)
+    # macOS specific settings
+    CXX = clang++
+    CXXFLAGS += -stdlib=libc++
+    
+    # Check for Apple Silicon
+    ifeq ($(UNAME_M),arm64)
+        # Apple Silicon (M1/M2) paths
+        LDFLAGS += -L/opt/homebrew/lib
+        INCLUDES = -I/opt/homebrew/include -I/opt/homebrew/opt/cryptopp/include -I/opt/homebrew/opt/re2/include
+    else
+        # Intel Mac paths
+        LDFLAGS += -L/usr/local/lib
+        INCLUDES = -I/usr/local/include -I/usr/local/opt/cryptopp/include -I/usr/local/opt/re2/include
+    endif
+else
+    # Linux specific settings
+    INCLUDES = -I/usr/include
+endif
 
-.PHONY: static-install-docker
-static-install-docker: pka2xml-static-docker install
+SRC = main.cpp
+OBJ = $(SRC:.cpp=.o)
+TARGET = pka2xml
 
-.PHONY: dynamic-install
-dynamic-install: pka2xml-dynamic install
+.PHONY: all clean install uninstall
 
-.PHONY: pka2xml-static
-pka2xml-static: main.cpp
-	g++ -std=c++17 -o pka2xml main.cpp -I/usr/local/include /usr/lib/libz.a /usr/local/lib/libre2.a /usr/local/lib/libcryptopp.a -lpthread -static -static-libstdc++
+all: $(TARGET)
 
-.PHONY: pka2xml-static-docker
-pka2xml-static-docker: main.cpp
-	g++ -std=c++17 -o pka2xml main.cpp -I/usr/include /usr/lib/x86_64-linux-gnu/libz.a /usr/lib/x86_64-linux-gnu/libre2.a /usr/lib/x86_64-linux-gnu/libcryptopp.a -lpthread -static -static-libstdc++
+$(TARGET): $(OBJ)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-.PHONY: pka2xml-dynamic
-pka2xml-dynamic: main.cpp
-	g++ -std=c++17 -o pka2xml main.cpp -I/usr/local/include -L/usr/local/lib -lcryptopp -lz -lre2
-
-install:
-	cp pka2xml /usr/local/bin
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
 clean:
-	rm pka2xml
+	rm -f $(OBJ) $(TARGET)
+
+install: $(TARGET)
+	install -m 755 $(TARGET) /usr/local/bin/
+
+uninstall:
+	rm -f /usr/local/bin/$(TARGET)
+
+# macOS specific targets
+install-macos: $(TARGET)
+	install -m 755 $(TARGET) /usr/local/bin/
+
+uninstall-macos:
+	rm -f /usr/local/bin/$(TARGET)
+
+# Docker specific targets (kept for compatibility)
+static-install-docker:
+	$(CXX) $(CXXFLAGS) -static -o $(TARGET) $(SRC) $(LDFLAGS)
+	install -m 755 $(TARGET) /usr/local/bin/
