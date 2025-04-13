@@ -1,25 +1,25 @@
 {
-    "configurations": [
-        {
-            "name": "Mac",
-            "includePath": [
-                "${workspaceFolder}/**",
-                "/usr/lib/**",
-                "/opt/homebrew/include/**",
-                "/opt/homebrew/opt/**",
-                "/opt/homebrew/opt/**"
-            ],
-            "defines": [],
-            "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks",
+  "configurations": [
+    {
+      "name": "Mac",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "/usr/lib/**",
+        "/opt/homebrew/include/**",
+        "/opt/homebrew/opt/**",
+        "/opt/homebrew/opt/**"
+      ],
+      "defines": [],
+      "macFrameworkPath": [
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks",
 				"/System/Library/Frameworks",
 				"/Library/Frameworks"
-            ],
+      ],
 			"compilerPath": "/usr/bin/clang++",
 			"cStandard": "c17",
-            "cppStandard": "c++17",
-            "intelliSenseMode": "macos-clang-arm64"
-        }
+      "cppStandard": "c++17",
+      "intelliSenseMode": "macos-clang-arm64"
+      }
     ],
-    "version": 4
+  "version": 4
 }

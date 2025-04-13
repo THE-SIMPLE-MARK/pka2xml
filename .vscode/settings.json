@@ -6,5 +6,6 @@
 		"vector": "cpp",
 		"string": "cpp"
 	},
-	"editor.indentSize": 4
+	"editor.indentSize": 2,
+	"editor.defaultFormatter": "xaver.clang-format",
 }
