@@ -1,4 +1,4 @@
 patch
 pka2xml
 shared
-main.o
+*.o

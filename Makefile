@@ -12,7 +12,7 @@ ifeq ($(UNAME_S),Darwin)
     
     # Check for Apple Silicon
     ifeq ($(UNAME_M),arm64)
-        # Apple Silicon (M1/M2) paths
+        # Apple Silicon paths
         LDFLAGS += -L/opt/homebrew/lib
         INCLUDES = -I/opt/homebrew/include -I/opt/homebrew/opt/cryptopp/include -I/opt/homebrew/opt/re2/include
     else
@@ -25,7 +25,7 @@ else
     INCLUDES = -I/usr/include
 endif
 
-SRC = main.cpp
+SRC = main.cpp $(wildcard src/*.cpp)
 OBJ = $(SRC:.cpp=.o)
 TARGET = pka2xml
 
