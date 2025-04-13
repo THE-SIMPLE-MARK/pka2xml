@@ -105,54 +105,80 @@ int main(int argc, char *argv[]) {
   bool verbose = option_exists(argv, argv + argc, "-v");
 
   try {
+    // -d: Decrypt pka/pkt to xml
     if (argc > 3 && option_exists(argv, argv + argc, "-d")) {
       if (verbose)
         std::cout << "Reading input file: " << argv[2] << std::endl;
+
       const std::string input = read_file_contents(argv[2]);
       if (verbose)
         std::cout << "Writing to output file: " << argv[3] << std::endl;
+
       write_file_contents(argv[3], pka2xml::decrypt_pka(input));
+
       if (verbose)
         std::cout << "Successfully decrypted file" << std::endl;
-    } else if (argc > 3 && option_exists(argv, argv + argc, "-e")) {
+    }
+    // -e: Encrypt xml to pka/pkt
+    else if (argc > 3 && option_exists(argv, argv + argc, "-e")) {
       if (verbose)
         std::cout << "Reading input file: " << argv[2] << std::endl;
+
       const std::string input = read_file_contents(argv[2]);
       if (verbose)
         std::cout << "Writing to output file: " << argv[3] << std::endl;
+
       write_file_contents(argv[3], pka2xml::encrypt_pka(input));
       if (verbose)
         std::cout << "Successfully encrypted file" << std::endl;
-    } else if (argc > 2 && option_exists(argv, argv + argc, "-logs")) {
+    }
+    // -logs: Decrypt packet tracer log file line by line
+    else if (argc > 2 && option_exists(argv, argv + argc, "-logs")) {
       FileHandler file(argv[2], std::ios::in);
       std::string line;
+
       while (std::getline(file.get(), line)) {
         std::cout << pka2xml::decrypt_logs(line) << std::endl;
       }
-    } else if (argc > 2 && option_exists(argv, argv + argc, "-nets")) {
+    }
+    // -nets: Decrypt packet tracer "nets" file
+    else if (argc > 2 && option_exists(argv, argv + argc, "-nets")) {
       if (verbose)
         std::cout << "Reading input file: " << argv[2] << std::endl;
+
       const std::string input = read_file_contents(argv[2]);
       std::cout << pka2xml::decrypt_nets(input) << std::endl;
-    } else if (argc > 2 && option_exists(argv, argv + argc, "--forge")) {
+    }
+    // --forge: Forge authentication file to bypass login
+    else if (argc > 2 && option_exists(argv, argv + argc, "--forge")) {
       if (verbose)
         std::cout << "Creating forged authentication file: " << argv[2]
                   << std::endl;
+
       write_file_contents(
           argv[2],
           pka2xml::encrypt_nets("foobar~foobar~foobar~foobar~1700000000"));
+
       if (verbose)
         std::cout << "Successfully created forged file" << std::endl;
-    } else if (argc > 3 && option_exists(argv, argv + argc, "-f")) {
+    }
+    // -f: Allow packet tracer file to be read by any version (fix old
+    // format)
+    else if (argc > 3 && option_exists(argv, argv + argc, "-f")) {
       if (verbose)
         std::cout << "Reading input file: " << argv[2] << std::endl;
+
       const std::string input = read_file_contents(argv[2]);
+
       if (verbose)
         std::cout << "Writing to output file: " << argv[3] << std::endl;
       write_file_contents(argv[3], pka2xml::fix(input));
+
       if (verbose)
         std::cout << "Successfully fixed file" << std::endl;
-    } else if (argc > 3 && option_exists(argv, argv + argc, "-r")) {
+    }
+    // -r: Modify user profile name in pka/pkt file (creates new file)
+    else if (argc > 3 && option_exists(argv, argv + argc, "-r")) {
       try {
         // Get the input filename and extension
         std::filesystem::path input_path(argv[2]);
@@ -166,14 +192,18 @@ int main(int argc, char *argv[]) {
 
         if (verbose)
           std::cout << "Reading input file: " << argv[2] << std::endl;
+
         const std::string input = read_file_contents(argv[2]);
+
         if (verbose)
           std::cout << "Input file size: " << input.size() << " bytes"
                     << std::endl;
 
         if (verbose)
           std::cout << "Decrypting file..." << std::endl;
+
         std::string xml = pka2xml::decrypt_pka(input);
+
         if (verbose)
           std::cout << "Decrypted XML size: " << xml.size() << " bytes"
                     << std::endl;
@@ -185,6 +215,7 @@ int main(int argc, char *argv[]) {
         if (verbose)
           std::cout << "Modifying user profile name to: " << argv[3]
                     << std::endl;
+
         xml = pka2xml::modify_user_profile(xml, argv[3], verbose);
 
         if (xml.empty()) {
@@ -194,15 +225,19 @@ int main(int argc, char *argv[]) {
         if (verbose)
           std::cout << "Encrypting and writing to new file: " << new_filename
                     << std::endl;
+
         write_file_contents(new_filename, pka2xml::encrypt_pka(xml));
 
         std::cout << "Created: " << new_filename << std::endl;
       } catch (const std::exception &e) {
         if (verbose)
           std::cerr << "Detailed error: " << e.what() << std::endl;
+
         die("Error processing file: " + std::string(e.what()));
       }
-    } else if (argc > 3 && option_exists(argv, argv + argc, "-rb")) {
+    }
+    // -rb: Batch modify user profile name in multiple pka/pkt files
+    else if (argc > 3 && option_exists(argv, argv + argc, "-rb")) {
       // Find the name argument (first non-option argument after -rb)
       int name_index = 2;
       while (name_index < argc && argv[name_index][0] == '-') {
@@ -214,6 +249,7 @@ int main(int argc, char *argv[]) {
       }
 
       std::string new_name = argv[name_index];
+
       if (verbose)
         std::cout << "Batch processing with new name: " << new_name
                   << std::endl;
@@ -248,6 +284,7 @@ int main(int argc, char *argv[]) {
           if (xml.empty()) {
             std::cerr << "Error: Failed to decrypt file: " << argv[i]
                       << std::endl;
+
             fail_count++;
             continue;
           }
@@ -258,6 +295,7 @@ int main(int argc, char *argv[]) {
           if (xml.empty()) {
             std::cerr << "Error: Failed to modify user profile name in file: "
                       << argv[i] << std::endl;
+
             fail_count++;
             continue;
           }
@@ -274,6 +312,7 @@ int main(int argc, char *argv[]) {
         } catch (const std::exception &e) {
           std::cerr << "Error processing file " << argv[i] << ": " << e.what()
                     << std::endl;
+
           fail_count++;
         }
       }
@@ -284,7 +323,9 @@ int main(int argc, char *argv[]) {
         std::cout << " (" << fail_count << " failed)";
       }
       std::cout << std::endl;
-    } else if (argc > 3 && option_exists(argv, argv + argc, "-rbm")) {
+    }
+    // -rbm: Create multiple variations of a file with different names
+    else if (argc > 3 && option_exists(argv, argv + argc, "-rbm")) {
       try {
         // Get the input filename and extension
         std::filesystem::path input_path(argv[2]);
@@ -340,9 +381,11 @@ int main(int argc, char *argv[]) {
             // Write the modified file
             write_file_contents(new_filename,
                                 pka2xml::encrypt_pka(modified_xml));
+
             if (verbose) {
               std::cout << "Successfully created: " << new_filename
                         << std::endl;
+
             } else {
               std::cout << "Created: " << new_filename << std::endl;
             }
@@ -365,6 +408,7 @@ int main(int argc, char *argv[]) {
       } catch (const std::exception &e) {
         if (verbose)
           std::cerr << "Detailed error: " << e.what() << std::endl;
+
         die("Error processing file: " + std::string(e.what()));
       }
     } else {
