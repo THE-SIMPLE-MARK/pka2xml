@@ -263,10 +263,11 @@ inline std::string encrypt(const std::string& input,
 
     // Stage 1: Compression
     std::string compressed = compress(reinterpret_cast<const unsigned char*>(input.data()), input.size());
+    size_t compressed_size = compressed.size(); // Use size_t
 
-    // Stage 2: Obfuscation
-    for (size_t i = 0; i < compressed.size(); i++) {
-        compressed[i] = static_cast<unsigned char>(compressed[i] ^ key[i % key.size()]);
+    // Stage 2: Obfuscation (Inverse of Decrypt Stage 3)
+    for (size_t i = 0; i < compressed_size; i++) {
+        compressed[i] = compressed[i] ^ (compressed_size - i); // Correct XOR
     }
 
     // Stage 3: Encryption
@@ -274,12 +275,15 @@ inline std::string encrypt(const std::string& input,
     CryptoPP::StringSource ss(compressed, true,
         new CryptoPP::AuthenticatedEncryptionFilter(e,
             new CryptoPP::StringSink(encrypted)));
+    size_t encrypted_size = encrypted.size(); // Use size_t
 
-    // Stage 4: Obfuscation
-    const int length = encrypted.size();
-    std::string output(length, '\0');
-    for (size_t i = 0; i < encrypted.size(); i++) {
-        output[length + ~i] = static_cast<unsigned char>(encrypted[i] ^ key[i % key.size()]);
+    // Stage 4: Obfuscation (Inverse of Decrypt Stage 1)
+    std::string output(encrypted_size, '\0');
+    for (size_t i = 0; i < encrypted_size; i++) {
+        // Apply the inverse XOR and index mapping from Decrypt Stage 1
+        // Decrypt Stage 1: processed[i] = input[length + ~i] ^ (length - i * length);
+        // Encrypt Stage 4: output[length + ~i] = encrypted[i] ^ (length - i * length);
+        output[encrypted_size + ~i] = encrypted[i] ^ (encrypted_size - i * encrypted_size);
     }
 
     return output;
