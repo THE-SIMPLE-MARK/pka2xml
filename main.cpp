@@ -103,15 +103,6 @@ int main(int argc, char* argv[]) {
     // Check for verbose flag
     bool verbose = option_exists(argv, argv + argc, "-v");
 
-#ifdef HAS_UI
-    if (argc > 1 && std::string(argv[1]) == "gui") {
-        QApplication app(argc, argv);
-        Gui gui{};
-        gui.show();
-        return app.exec();
-    }
-#endif
-
     try {
         if (argc > 3 && option_exists(argv, argv + argc, "-d")) {
             if (verbose) std::cout << "Reading input file: " << argv[2] << std::endl;
