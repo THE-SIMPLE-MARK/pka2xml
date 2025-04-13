@@ -6,5 +6,5 @@
 		"vector": "cpp",
 		"string": "cpp"
 	},
-	"C_Cpp.errorSquiggles": "enabled"
+	"editor.indentSize": 4
 }

@@ -4,17 +4,21 @@
             "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/usr/lib/**"
+                "/usr/lib/**",
+                "/opt/homebrew/include/**",
+                "/opt/homebrew/opt/**",
+                "/opt/homebrew/opt/**"
             ],
             "defines": [],
             "macFrameworkPath": [
-                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks"
+                "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/System/Library/Frameworks",
+				"/System/Library/Frameworks",
+				"/Library/Frameworks"
             ],
-            "compilerPath": "/usr/bin/clang",
-            "cStandard": "c17",
+			"compilerPath": "/usr/bin/clang++",
+			"cStandard": "c17",
             "cppStandard": "c++17",
-            "intelliSenseMode": "macos-clang-arm64",
-            "configurationProvider": "ms-vscode.makefile-tools"
+            "intelliSenseMode": "macos-clang-arm64"
         }
     ],
     "version": 4
