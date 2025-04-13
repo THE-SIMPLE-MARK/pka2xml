@@ -71,16 +71,16 @@ void print_help() {
   std::cout << R"(Usage: pka2xml [options]
 
 Options:
-  -d <in> <out>   Decrypt pka/pkt to xml
-  -e <in> <out>   Encrypt xml to pka/pkt
-  -f <in> <out>   Allow packet tracer file to be read by any version
-  -nets <in>      Decrypt packet tracer "nets" file
-  -logs <in>      Decrypt packet tracer log file
-  -r <in> <name>  Modify user profile name in pka/pkt file (creates new file)
-  -rb <name> <files...>  Batch modify user profile name in multiple pka/pkt files
-  -rbm <in> <names...>  Create multiple variations of a file with different names
-  --forge <out>   Forge authentication file to bypass login
-  -v              Verbose output
+  -d <in> <out>						Decrypt pka/pkt to xml
+  -e <in> <out>						Encrypt xml to pka/pkt
+  -f <in> <out>						Allow packet tracer file to be read by any version
+  -nets <in>							Decrypt packet tracer "nets" file
+  -logs <in>							Decrypt packet tracer log file
+  -r <in> <name>					Modify user profile name in pka/pkt file (creates new file)
+  -rb <name> <files...>		Batch modify user profile name in multiple pka/pkt files
+  -rbm <in> <names...>		Create multiple variations of a file with different names
+  --forge <out>						Forge authentication file to bypass login
+  -v											Verbose output
 
 Examples:
   pka2xml -d foobar.pka foobar.xml
